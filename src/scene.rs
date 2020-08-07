@@ -5,6 +5,7 @@ use crate::Entity;
 /// responsible for (de)spawning and querying entities which
 /// are unique to an application and thus can be moved from
 /// scene to scene.
+#[derive(Debug, Default)]
 pub struct Scene
 {
 
@@ -12,12 +13,6 @@ pub struct Scene
 
 impl Scene
 {
-    /// create a new epmty scene
-    pub fn new() -> Self
-    {
-        Scene { }
-    }
-
     /// spawn a single entity into this scene with the given
     /// components
     pub fn spawn(&self, _: ()) -> Entity

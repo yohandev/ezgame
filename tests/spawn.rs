@@ -3,7 +3,7 @@ use ezgame::*;
 #[test]
 fn spawn_main_thread()
 {
-    let scene = Scene::new();
+    let scene = Scene::default();
 
     let ent0 = scene.spawn(());
     let ent1 = scene.spawn(());
@@ -31,7 +31,7 @@ fn spawn_multi_threaded()
 
     println!("spawning {} entities from {} threads...", SPAWN, THREADS);
 
-    let scene = Arc::new(Scene::new());
+    let scene = Arc::new(Scene::default());
 
     let entities = Arc::new(Mutex::new(vec![]));
 
