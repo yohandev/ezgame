@@ -1,4 +1,4 @@
-use crate::Entity;
+use crate::{ Entity, EntityMap };
 
 /// a container for entities and their components.
 ///
@@ -8,7 +8,7 @@ use crate::Entity;
 #[derive(Debug, Default)]
 pub struct Scene
 {
-
+    entities: EntityMap
 }
 
 impl Scene
