@@ -19,6 +19,39 @@ fn spawn_main_thread()
     println!("4: {}", ent4);
 }
 
+#[test]
+fn spawn_cmp()
+{
+    let mut scene = Scene::default();
+
+    #[derive(Debug)]
+    struct Pos(f32, f32, f32);
+    #[derive(Debug)]
+    struct Vel(f32, f32, f32);
+    #[derive(Debug)]
+    struct Name(&'static str);
+
+    impl Component for Pos { }
+    impl Component for Vel { }
+    impl Component for Name { }
+
+    let _ = scene.spawn(());
+    let _ = scene.spawn((Pos(0.0, 1.0, 27.0), Vel(0.0, -9.8, 0.0)));
+    let _ = scene.spawn((Pos(1.0, -5.0, -2.0), Vel(10.0, 1.2, 5.3)));
+    let _ = scene.spawn((Pos(10.0, 10.0, 10.0), Vel(5.0, 5.0, 5.0), Name("Entity#3")));
+
+    let pos_vel = scene
+        .archetype::<(Pos, Vel)>()
+        .expect("(Pos, Vel) archetype wasn't created!");
+    let pos_vel_chunk = pos_vel
+        .chunks()
+        .first()
+        .expect("(Pos, Vel) archetype has no chunks!");
+
+    println!("(Pos, Vel) -> Pos: {:?}", pos_vel_chunk.components::<Pos>());
+    println!("(Pos, Vel) -> Vel: {:?}", pos_vel_chunk.components::<Vel>());
+}
+
 // #[test]
 // fn spawn_multi_threaded()
 // {

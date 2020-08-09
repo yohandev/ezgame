@@ -226,11 +226,11 @@ impl Archetype
             .unwrap_or_else(|| self.new_chunk());
         let index = self.chunks[chunk].len;
 
-        // insert entity ID
-        self.chunks[chunk].entities_mut()[index] = e;
-
         // increment length
         self.chunks[chunk].len += 1;
+
+        // insert entity ID
+        self.chunks[chunk].entities_mut()[index] = e;
 
         // returns location
         EntityLocation { archetype, chunk, index }
@@ -245,6 +245,12 @@ impl Archetype
     pub(crate) fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
     {
         self.chunks[loc.chunk].components_mut::<T>()[loc.index] = cmp;
+    }
+
+    /// get the chunks within this archetype
+    pub fn chunks(&self) -> &Vec<ArchetypeChunk>
+    {
+        &self.chunks
     }
 }
 
@@ -358,7 +364,7 @@ impl ArchetypeMap
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn get_dyn<F>(&mut self, ty: &Vec<TypeId>, meta: F) -> &mut Archetype
+    pub fn get_or_insert_dyn<F>(&mut self, ty: &Vec<TypeId>, meta: F) -> &mut Archetype
         where F: FnOnce() -> Vec<TypeMeta>
     {
         let id = match self.map.get_mut(ty)
@@ -382,7 +388,7 @@ impl ArchetypeMap
     }
 
     /// get an archetype or insert it into `self`
-    pub fn get<T: ComponentSet>(&mut self) -> &mut Archetype
+    pub fn get_or_insert<T: ComponentSet>(&mut self) -> &mut Archetype
     {
         // get the `TypeId`s within the set
         let ty = T::ty();
@@ -405,6 +411,18 @@ impl ArchetypeMap
         };
 
         &mut self.arch[id]
+    }
+
+    /// get an archetype if it exists
+    pub fn get<T: ComponentSet>(&self) -> Option<&Archetype>
+    {
+        // get the `TypeId`s within the set
+        let ty = T::ty();
+
+        // get the archetype if it's there
+        self.map
+            .get(&ty)
+            .map(|id| &self.arch[*id])
     }
 }
 

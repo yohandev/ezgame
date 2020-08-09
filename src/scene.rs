@@ -1,4 +1,4 @@
-use crate::{ Entity, EntityMap, ComponentSet, ArchetypeMap };
+use crate::{ Entity, EntityMap, ComponentSet, ArchetypeMap, Archetype };
 
 /// a container for entities and their components.
 ///
@@ -22,7 +22,7 @@ impl Scene
         let ent = Entity::next(1).start;
 
         // get or create archetype
-        let arch = self.archetypes.get::<T>();
+        let arch = self.archetypes.get_or_insert::<T>();
 
         // insert entity into archetype
         let loc = arch.insert(ent.id());
@@ -36,4 +36,10 @@ impl Scene
         // return the entity
         ent
     }
+
+    /// get an entity archetype within this scene, if it exists
+    pub fn archetype<T: ComponentSet>(&self) -> Option<&Archetype>
+    {
+        self.archetypes.get::<T>()
+    } 
 }

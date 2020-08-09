@@ -188,7 +188,7 @@ impl EntityMapChunk
 impl EntityLocation
 {
     /// represents an null entity location
-    pub const NULL: EntityLocation = EntityLocation { archetype: 0, chunk: 0, index: 0 };
+    pub const NULL: EntityLocation = EntityLocation { archetype: usize::MAX, chunk: 0, index: 0 };
 }
 
 impl Display for EntityLocation
