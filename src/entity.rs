@@ -11,11 +11,11 @@ use std::fmt::Display;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Entity
 {
-    id: EntID
+    id: EntId
 }
 
 /// alias for u64, which is used as an entity's identifier
-pub type EntID = u64;
+pub type EntId = u64;
 
 /// next entity ID(thread-safe)
 static ENT_CURSOR: AtomicU64 = AtomicU64::new(0);
@@ -25,7 +25,7 @@ static ENT_CURSOR: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Default)]
 pub struct EntityMap
 {
-    chunks: HashMap<EntID, EntityMapChunk>
+    chunks: HashMap<EntId, EntityMapChunk>
 }
 
 /// the storage location of an entity's components
@@ -50,7 +50,7 @@ struct EntityMapChunk
 impl Entity
 {
     /// get this entity's unique identifier
-    pub fn id(&self) -> EntID
+    pub fn id(&self) -> EntId
     {
         self.id
     }

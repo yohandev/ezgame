@@ -33,6 +33,7 @@ fn entity_loc_more_chunks()
 
         println!("{} is at {}", e, map[e]);
     }
+    println!("map debug view: {:?}", map);
 }
 
 #[test]
