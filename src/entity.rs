@@ -32,8 +32,9 @@ pub struct EntityMap
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub struct EntityLocation
 {
-    pub archetype: usize,
-    pub index: usize,
+    pub(crate) archetype: usize,
+    pub(crate) chunk: usize,
+    pub(crate) index: usize,
 }
 
 /// a chunk within an entity map
@@ -187,7 +188,7 @@ impl EntityMapChunk
 impl EntityLocation
 {
     /// represents an null entity location
-    pub const NULL: EntityLocation = EntityLocation { archetype: 0, index: 0 };
+    pub const NULL: EntityLocation = EntityLocation { archetype: 0, chunk: 0, index: 0 };
 }
 
 impl Display for EntityLocation

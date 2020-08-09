@@ -5,8 +5,9 @@ use std::ptr::NonNull;
 use std::any::TypeId;
 use std::rc::Rc;
 
-use crate::{ EntId, Component };
+use crate::{ EntId, EntityLocation, Component, ComponentSet };
 
+#[derive(Debug)]
 pub struct Archetype
 {
     /// meta-data about this `Archetype`, which is shared with its `ArchetypeChunk`
@@ -19,10 +20,11 @@ pub struct Archetype
     /// list of chunk indices with free entity slots and zero shared components
     ///
     /// TODO: shared component to free chunk map of type `HashMap<..., Vec<ArchetypeChunkIndex>>
-    free: Vec<ArchetypeChunkIndex>,
+    free: Vec<usize>,
 }
 
 /// a single, 16kb chunk in an archetype
+#[derive(Debug)]
 pub struct ArchetypeChunk
 {
     /// meta-data about this chunk's parent `Archetype`, which is shared with
@@ -48,8 +50,11 @@ pub struct ArchetypeChunk
 /// meta-data about an archetype, which is shared(via `Rc`) between a parent `Archetype`
 /// and its `ArchetypeChunk` children. this is caclulated once and never altered in
 /// the `Archetype::new` constructor
-struct ArchetypeMeta
+#[derive(Debug)]
+pub struct ArchetypeMeta
 {
+    /// index of this archetype in the `Scene`'s archetype vector
+    id: usize,
     /// meta-data about the components' types stored in this archetype
     cmp: HashMap<TypeId, CmpMeta>,
     /// (cached) max entities that can be stored in a single chunk within
@@ -62,8 +67,18 @@ struct ArchetypeMeta
     layout: Layout,
 }
 
-/// index to a chunk within an archetype. type alias exists for clarity
-type ArchetypeChunkIndex = usize;
+/// structure that maps component `Vec<TypeMeta>` to component archetypes in
+/// a hashmap-like structure
+#[derive(Debug, Default)]
+pub struct ArchetypeMap
+{
+    /// complete list of `Archetype`s. the collection can be expanded but is
+    /// never shrunk, therefore elements are 'pinned' and an index can safely
+    /// reference an archetype
+    arch: Vec<Archetype>,
+    /// maps sorted `Vec<TypeMeta>` to an archetype index in `self.arch`
+    map: HashMap<Vec<TypeId>, usize>,
+}
 
 /// meta-data about an arbitrary type
 #[derive(Debug, Copy, Clone)]
@@ -108,14 +123,14 @@ impl Archetype
     pub const CHUNK_SIZE: usize = 16_000;
 
     /// creates a new archetype from a list of (maybe unsorted) types
-    pub fn new(mut ty: Vec<TypeMeta>) -> Self
+    fn new(id: usize, ty: Vec<TypeMeta>) -> Self
     {
         // archetype meta...
         let meta =
         {
             // sort types by alignment(greatest to least)...
-            // note: this might not be necesarry...
-            ty.sort_unstable();
+            // note: already comes in sorted
+            //ty.sort_unstable();
 
             // alignment of chunks(EntId, because `*self.data.get()` starts with entity IDs
             let align = std::mem::align_of::<EntId>();
@@ -157,7 +172,7 @@ impl Archetype
             let layout = Layout::from_size_align(alloc, align).unwrap();
 
             // return the archetype meta...
-            ArchetypeMeta { cmp, max, layout }
+            ArchetypeMeta { id, cmp, max, layout }
         };
 
         // use a shared ref, to share with children chunks
@@ -171,8 +186,8 @@ impl Archetype
     }
 
     /// create a new empty chunk with no shared components and add it to
-    /// this archetype
-    fn new_chunk(&mut self)
+    /// this archetype. returns the chunk's index
+    fn new_chunk(&mut self) -> usize
     {
         // first get a well-aligned layout
         let layout = self.meta.layout;
@@ -194,6 +209,42 @@ impl Archetype
         self.free.push(self.chunks.len());
         // append the chunk to this archetype
         self.chunks.push(ArchetypeChunk { meta, data, len });
+
+        // return the new chunk's index
+        *self.free.last().unwrap()
+    }
+
+    /// inserts an entity into this archetype, and returns the index where it was placed
+    /// every type must be written immediately after
+    pub(crate) fn insert(&mut self, e: EntId) -> EntityLocation
+    {
+        // info for the entity location being returned
+        let archetype = self.meta.id;
+        let chunk = self.free
+            .last()
+            .copied()
+            .unwrap_or_else(|| self.new_chunk());
+        let index = self.chunks[chunk].len;
+
+        // insert entity ID
+        self.chunks[chunk].entities_mut()[index] = e;
+
+        // increment length
+        self.chunks[chunk].len += 1;
+
+        // returns location
+        EntityLocation { archetype, chunk, index }
+    }
+
+    /// set the component data for an `EntityLocation` inside this archetype
+    ///
+    /// this should be called directly after `Archetype::insert` and for every
+    /// component
+    ///
+    /// `loc` must be valid and `typeof(T)` must be within this archetype
+    pub(crate) fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
+    {
+        self.chunks[loc.chunk].components_mut::<T>()[loc.index] = cmp;
     }
 }
 
@@ -217,6 +268,24 @@ impl ArchetypeChunk
         unsafe { std::slice::from_raw_parts(ptr, size * self.len) }
     }
 
+    /// see `ArchetypeChunk::components`
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn components_mut_dyn(&mut self, ty: TypeId, size: usize) -> &mut [u8]
+    {
+        // meta-data about the component being accessed
+        let meta = self.meta.cmp
+            .get(&ty)
+            .expect("attempting to access components not within this archetype!");
+
+        // pointer to the start of component being accessed
+        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
+
+        // create slice
+        unsafe { std::slice::from_raw_parts_mut(ptr, size * self.len) }
+    }
+
     /// returns a slice of components within this `ArchetypeChunk`. the `T` parameter
     /// must `impl Component` AND be stored within this archetype, else the function
     /// will panic.
@@ -236,6 +305,107 @@ impl ArchetypeChunk
         // create slice
         unsafe { std::slice::from_raw_parts(ptr, self.len) }
     }
+
+    /// returns a slice of components within this `ArchetypeChunk`. the `T` parameter
+    /// must `impl Component` AND be stored within this archetype, else the function
+    /// will panic.
+    ///
+    /// the slice returned only contains the occupied components, not the entire capacity:
+    /// `&[T].len() == chunk.len()`
+    pub fn components_mut<T: Component>(&mut self) -> &mut [T]
+    {
+        // meta-data about the component being accessed
+        let meta = self.meta.cmp
+            .get(&TypeId::of::<T>())
+            .expect("attempting to access components not within this archetype!");
+
+        // pointer to the start of component being accessed
+        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *mut T };
+
+        // create slice
+        unsafe { std::slice::from_raw_parts_mut(ptr, self.len) }
+    }
+
+    /// returns a slice of entity IDs within this chunk. the slice returned only contains the
+    /// occupied entity slots, not the entire capacity: `&[EntId].len() == chunk.len()`
+    pub fn entities(&self) -> &[EntId]
+    {
+        // pointer to the start of entity IDs
+        let ptr = unsafe { (*self.data.get()).as_ptr() as *const EntId };
+
+        // create slice
+        unsafe { std::slice::from_raw_parts(ptr, self.len) }
+    }
+
+    /// returns a slice of entity IDs within this chunk. the slice returned only contains the
+    /// occupied entity slots, not the entire capacity: `&[EntId].len() == chunk.len()`
+    pub fn entities_mut(&mut self) -> &mut [EntId]
+    {
+        // pointer to the start of entity IDs
+        let ptr = unsafe { (*self.data.get()).as_ptr() as *mut EntId };
+
+        // create slice
+        unsafe { std::slice::from_raw_parts_mut(ptr, self.len) }
+    }
+}
+
+impl ArchetypeMap
+{
+    /// see `ArchetypeMap::get`
+    ///
+    /// both `ty` and the output of `meta` MUST be sorted via their `Ord` traits,
+    /// similar to implementing the `ComponentSet` trait on a concrete type
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn get_dyn<F>(&mut self, ty: &Vec<TypeId>, meta: F) -> &mut Archetype
+        where F: FnOnce() -> Vec<TypeMeta>
+    {
+        let id = match self.map.get_mut(ty)
+        {
+            Some(i) => *i,
+            None =>
+            {
+                // ID of the new archetype
+                let id = self.arch.len();
+
+                // create new archetype
+                self.arch.push(Archetype::new(id, meta()));
+                self.map.insert(ty.clone(), id);
+
+                // return ID of the new archetype
+                id
+            }
+        };
+
+        &mut self.arch[id]
+    }
+
+    /// get an archetype or insert it into `self`
+    pub fn get<T: ComponentSet>(&mut self) -> &mut Archetype
+    {
+        // get the `TypeId`s within the set
+        let ty = T::ty();
+
+        let id = match self.map.get_mut(&ty)
+        {
+            Some(i) => *i,
+            None =>
+            {
+                // ID of the new archetype
+                let id = self.arch.len();
+
+                // create new archetype
+                self.arch.push(Archetype::new(id, T::meta()));
+                self.map.insert(ty, id);
+
+                // return ID of the new archetype
+                id
+            }
+        };
+
+        &mut self.arch[id]
+    }
 }
 
 impl Drop for ArchetypeChunk
@@ -252,7 +422,7 @@ impl Drop for ArchetypeChunk
 impl TypeMeta
 {
     /// get the type meta given a compile-time type
-    fn of<T: 'static>() -> Self
+    pub fn of<T: 'static>() -> Self
     {
         unsafe fn drop_ptr<T>(ptr: *mut u8)
         {
