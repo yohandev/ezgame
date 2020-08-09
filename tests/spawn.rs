@@ -48,8 +48,22 @@ fn spawn_cmp()
         .first()
         .expect("(Pos, Vel) archetype has no chunks!");
 
+    println!("(Pos, Vel) -> Ent: {:?}", pos_vel_chunk.entities());
     println!("(Pos, Vel) -> Pos: {:?}", pos_vel_chunk.components::<Pos>());
     println!("(Pos, Vel) -> Vel: {:?}", pos_vel_chunk.components::<Vel>());
+
+    let pos_vel_name = scene
+        .archetype::<(Pos, Vel, Name)>()
+        .expect("(Pos, Vel, Name) archetype wasn't created!");
+    let pos_vel_name_chunk = pos_vel_name
+        .chunks()
+        .first()
+        .expect("(Pos, Vel, Name) archetype has no chunks!");
+
+    println!("(Pos, Vel, Name) -> Ent: {:?}", pos_vel_name_chunk.entities());
+    println!("(Pos, Vel, Name) -> Pos: {:?}", pos_vel_name_chunk.components::<Pos>());
+    println!("(Pos, Vel, Name) -> Vel: {:?}", pos_vel_name_chunk.components::<Vel>());
+    println!("(Pos, Vel, Name) -> Name: {:?}", pos_vel_name_chunk.components::<Name>());
 }
 
 // #[test]
