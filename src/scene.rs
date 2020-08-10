@@ -60,13 +60,13 @@ impl Scene
             // get the chunk, which won't error even if the entity doesn't have
             // the component as long as the entity location is valid
             let chunk = &self.archetypes
-                .inner()[loc.archetype] // get the entity's archetype
-                .chunks()[loc.chunk];   // get the entity's chunk
+                .inner()[loc.archetype()] // get the entity's archetype
+                .chunks()[loc.chunk()];   // get the entity's chunk
             
             // prevent panic, if the entity doesn't have the component
             if chunk.meta().contains::<T>()
             {
-                Some(&chunk.components::<T>()[loc.index])
+                Some(&chunk.components::<T>()[loc.index()])
             }
             else
             {
@@ -92,13 +92,13 @@ impl Scene
             // get the chunk, which won't error even if the entity doesn't have
             // the component as long as the entity location is valid
             let chunk = &mut self.archetypes
-                .inner_mut()[loc.archetype] // get the entity's archetype
-                .chunks_mut()[loc.chunk];   // get the entity's chunk
+                .inner_mut()[loc.archetype()] // get the entity's archetype
+                .chunks_mut()[loc.chunk()];   // get the entity's chunk
             
             // prevent panic, if the entity doesn't have the component
             if chunk.meta().contains::<T>()
             {
-                Some(&mut chunk.components_mut::<T>()[loc.index])
+                Some(&mut chunk.components_mut::<T>()[loc.index()])
             }
             else
             {

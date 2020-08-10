@@ -5,7 +5,7 @@ use std::ptr::NonNull;
 use std::any::TypeId;
 use std::rc::Rc;
 
-use crate::{ EntId, EntityLocation, Component, ComponentSet };
+use crate::{ EntId, EntityLocation, Component, ComponentSet, TypeMeta };
 
 #[derive(Debug)]
 pub struct Archetype
@@ -80,24 +80,6 @@ pub struct ArchetypeMap
     map: HashMap<Vec<TypeId>, usize>,
 }
 
-/// meta-data about an arbitrary type
-#[derive(Debug, Copy, Clone)]
-pub struct TypeMeta
-{
-    /// store the type ID
-    id: TypeId,
-    /// size, in bytes, of the type
-    size: usize,
-    /// alignment, in bytes, of the type
-    align: usize,
-    /// drop logic needs to be cached to because we're working with u8*
-    drop: DropFn,
-}
-
-/// pointer to the drop in place function for a type, when it is
-/// represented as a void*
-type DropFn = unsafe fn(*mut u8);
-
 /// meta-data about an arbitrary component type
 ///
 /// tuple of (`meta`: TypeMeta, `offset`: usize)
@@ -138,7 +120,7 @@ impl Archetype
             // size, in bytes, of all components + EntId for one entity excluding padding
             let size = std::mem::size_of::<EntId>() + ty
                 .iter()
-                .fold(0, |acc, n| acc + n.size);
+                .fold(0, |acc, n| acc + n.size());
             // max entities that can be stored in this chunk
             let max = Self::CHUNK_SIZE / size;
             // `alloc`: size, in bytes, of the allocation per chunk. it over-allocates slightly
@@ -156,13 +138,13 @@ impl Archetype
                 for t in ty
                 {
                     // padding for alignment(increment alloc_size)
-                    alloc += (t.align - (alloc % t.align)) % t.align;
+                    alloc += (t.alignment() - (alloc % t.alignment())) % t.alignment();
 
                     // add to meta
-                    meta.insert(t.id, (t, alloc));
+                    meta.insert(t.id(), (t, alloc));
                     
                     // component data(increment alloc_size)
-                    alloc += t.size * max;
+                    alloc += t.size() * max;
                 }
 
                 (alloc, meta)
@@ -233,7 +215,7 @@ impl Archetype
         self.chunks[chunk].entities_mut()[index] = e;
 
         // returns location
-        EntityLocation { archetype, chunk, index }
+        EntityLocation::new(archetype, chunk, index)
     }
 
     /// set the component data for an `EntityLocation` inside this archetype
@@ -244,9 +226,9 @@ impl Archetype
     /// `loc` must be valid and `typeof(T)` must be within this archetype
     pub fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
     {
-        debug_assert_eq!(self.meta.id, loc.archetype, "attempting to access entity location outside this archetype!");
+        debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
 
-        self.chunks[loc.chunk].components_mut::<T>()[loc.index] = cmp;
+        self.chunks[loc.chunk()].components_mut::<T>()[loc.index()] = cmp;
     }
 
     /// get the chunks within this archetype
@@ -529,54 +511,3 @@ impl Drop for ArchetypeChunk
         }
     }
 }
-
-impl TypeMeta
-{
-    /// get the type meta given a compile-time type
-    pub fn of<T: 'static>() -> Self
-    {
-        unsafe fn drop_ptr<T>(ptr: *mut u8)
-        {
-            ptr.cast::<T>().drop_in_place()
-        }
-
-        Self
-        {
-            id: TypeId::of::<T>(),
-            size: std::mem::size_of::<T>(),
-            align: std::mem::align_of::<T>(),
-            drop: drop_ptr::<T>,
-        }
-    }
-}
-
-impl PartialOrd for TypeMeta
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering>
-    {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for TypeMeta
-{
-    fn eq(&self, other: &Self) -> bool
-    {
-        self.id == other.id
-    } 
-}
-
-impl Ord for TypeMeta
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering
-    {
-        self.align
-            .cmp(&other.align)                      // compare by alignment
-            .reverse()                              // reverse to maximize space
-                                                    // start with greatest alignment ->
-                                                    // only space wasted is `abs(greatest_align - align_of(EntId))`
-            .then_with(|| self.id.cmp(&other.id))   // tie breaker via ID
-    }
-}
-
-impl Eq for TypeMeta { }

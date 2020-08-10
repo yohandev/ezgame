@@ -32,9 +32,9 @@ pub struct EntityMap
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
 pub struct EntityLocation
 {
-    pub(crate) archetype: usize,
-    pub(crate) chunk: usize,
-    pub(crate) index: usize,
+    archetype: usize,
+    chunk: usize,
+    index: usize,
 }
 
 /// a chunk within an entity map
@@ -217,6 +217,30 @@ impl EntityLocation
 {
     /// represents an null entity location
     pub const NULL: EntityLocation = EntityLocation { archetype: usize::MAX, chunk: 0, index: 0 };
+
+    /// get the archetype ID part of this `EntityLocation`
+    pub fn archetype(&self) -> usize
+    {
+        self.archetype
+    }
+
+    /// get the chunk ID within the archetype part of this `EntityLocation`
+    pub fn chunk(&self) -> usize
+    {
+        self.chunk
+    }
+
+    /// get the entity index within the chunk within the archetype part of this `EntityLocation`
+    pub fn index(&self) -> usize
+    {
+        self.index
+    }
+
+    /// create a new entity location. this is an inner library operation
+    pub(crate) fn new(archetype: usize, chunk: usize, index: usize) -> Self
+    {
+        Self { archetype, chunk, index }
+    }
 }
 
 impl Display for EntityLocation
