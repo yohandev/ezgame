@@ -37,6 +37,36 @@ impl Scene
         ent
     }
 
+    /// despawns a single entity if it's alive and in this scene.
+    /// returns whether the operation was succesful
+    pub fn despawn(&mut self, ent: Entity) -> bool
+    {
+        // entity location
+        let loc = self.entities.get(ent);
+
+        // entity isn't alive
+        if loc == EntityLocation::NULL
+        {
+            false
+        }
+        else
+        {
+            // get the entity's current archetype
+            let arch = &mut self.archetypes.inner_mut()[loc.archetype()];
+            
+            // update the location of the entity that was moved, if any
+            if let Some(moved) = arch.remove(loc)
+            {
+                self.entities.insert(Entity::from_id(moved), loc);
+            }
+
+            // remove entity from scene
+            self.entities.remove(ent);
+
+            true
+        }
+    }
+
     /// is the entity alive and in this `Scene`?
     pub fn contains(&self, ent: Entity) -> bool
     {

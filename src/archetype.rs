@@ -218,6 +218,77 @@ impl Archetype
         EntityLocation::new(archetype, chunk, index)
     }
 
+    /// remove an entity from this archetype and return the entity whose `EntityLocation`
+    /// was altered(if at all)
+    ///
+    /// chunks in archetypes are kept packed, and the removing an entity means
+    /// replacing its slot with the last entity in the chunk
+    pub(crate) fn remove(&mut self, loc: EntityLocation) -> Option<EntId>
+    {
+        debug_assert_eq!(loc.archetype(), self.meta().id, "attempting to remove an entity not in this archetype!");
+
+        // get the chunk being affected
+        let chunk = &mut self.chunks[loc.chunk()];
+
+        // is the entity being removed *not* the last?
+        // yes -> place the last entity in the entity being removed
+        // no -> do nothing
+        // returns the EntId of the entity that was moved(previous last entity in chunk)
+        let moved = if loc.index() != chunk.len - 1
+        {
+            // swap out EntIds
+            let last_ent =
+            {
+                let ent = chunk.entities_mut();
+                let last = *ent.last().unwrap();
+
+                // slot of the entity being removed is now the last entity
+                ent[loc.index()] = last;
+
+                // the last entity is returned because its location was moved
+                last
+            };
+
+            // swap out components, one-by-one
+            for (_, (ty, offset)) in &chunk.meta().cmp
+            {
+                let (src, dst) = unsafe
+                {
+                    // pointer to the start of the component region
+                    let ptr = (*chunk.data.get()).as_ptr().add(*offset);
+
+                    // component of the entity being deleted
+                    let dst = ptr.add(loc.index() * ty.size());
+
+                    // component of the last entity in the chunk
+                    let src = ptr.add((chunk.len - 1) * ty.size());
+
+                    (src, dst)
+                };
+                
+                // copy the last entity's component into the slot where the
+                // entity being deleted was
+                //
+                // if C is being deleted, G takes its place via memcpy  
+                //        ⬇⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺|
+                // [A, B, C, D, E, F, G]
+                unsafe { std::ptr::copy_nonoverlapping(src, dst, ty.size()); }
+            }
+
+            Some(last_ent)
+        }
+        else
+        {
+            None
+        };
+
+        // decrease length of chunk
+        chunk.len -= 1;
+
+        // return the entity moved(which is now at the provided loc)
+        moved
+    }
+
     /// set the component data for an `EntityLocation` inside this archetype
     ///
     /// this should be called directly after `Archetype::insert` and for every
@@ -420,13 +491,6 @@ impl ArchetypeMap
         self.map
             .get(&ty)
             .map(|id| &self.arch[*id])
-    }
-
-    /// get an archetype by its ID
-    /// id must be valid and in range
-    pub fn get_by_id(&self, id: usize) -> &Archetype
-    {
-        &self.arch[id]
     }
 
     /// get all the `Archetype`s within this map, in order of their

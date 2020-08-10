@@ -70,6 +70,16 @@ impl Entity
             end: Entity { id: i + n },
         }
     }
+
+    /// create a new entity from its ID
+    ///
+    /// normally this is undefined behaviour, because entities
+    /// are obtained from `World::spawn` or queries, but is needed
+    /// in internal operations
+    pub(crate) fn from_id(id: EntId) -> Self
+    {
+        Self { id }
+    }
 }
 
 impl Display for Entity
