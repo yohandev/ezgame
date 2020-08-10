@@ -75,3 +75,36 @@ fn despawn()
     assert_eq!(scene.get::<Pos>(ent2), Some(&Pos(2, 4, 47)), "entity#2's Pos wasn't moved properly");
     assert_eq!(scene.get::<Vel>(ent2), Some(&Vel(0, 1, -6)), "entity#2's Vel wasn't moved properly");
 }
+
+#[test]
+fn despawn_many()
+{
+    const N: u64 = 100_000;
+
+    let mut scene = Scene::default();
+
+    for _ in 0..N
+    {
+        scene.spawn((Pos(0, 0, 0), Vel(0, 0, 0)));
+    }
+    let chunks = scene
+        .archetype::<(Vel, Pos)>()
+        .expect("(Pos, Vel) archetype wasn't created!")
+        .chunks()
+        .len();
+    
+    println!("spawned {} entities over {} chunks", N, chunks);
+
+    for id in 0..N
+    {
+        scene.despawn(unsafe { Entity::from_id(id) });
+    }
+
+    let chunks = scene
+        .archetype::<(Vel, Pos)>()
+        .expect("(Pos, Vel) archetype wasn't created!")
+        .chunks()
+        .len();
+
+    println!("archetype has {} chunks left", chunks);
+}
