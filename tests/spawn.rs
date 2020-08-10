@@ -28,6 +28,8 @@ fn spawn_main_thread()
     println!("2: {}", ent2);
     println!("3: {}", ent3);
     println!("4: {}", ent4);
+
+    println!("{}", scene);
 }
 
 #[test]

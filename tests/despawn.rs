@@ -23,6 +23,7 @@ fn despawn()
             .first()
             .expect("(Pos, Vel) archetype doesn't have chunks!");
 
+        println!("{}", scene);
         println!("Ent: {:?}", chunk.entities());
         println!("Pos: {:?}", chunk.components::<Pos>());
         println!("Vel: {:?}", chunk.components::<Vel>());

@@ -272,7 +272,26 @@ impl Display for EntityLocation
         }
         else
         {
-            f.write_fmt(format_args!("archetype#{}[{}]", self.archetype, self.index))
+            f.write_fmt(format_args!("archetypes[{}].chunks[{}].index[{}]", self.archetype, self.chunk, self.index))
         }
+    }
+}
+
+impl Display for EntityMap
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        let iter = self.chunks
+            .iter()
+            .filter(|(_, chunk)| chunk.len > 0)
+            .flat_map(|(i, chunk)| (*i..*i + EntityMapChunk::SIZE as u64).zip(chunk.map.iter()))
+            .filter(|(_, loc)| loc != &&EntityLocation::NULL)
+            .map(|(id, _)| id);
+        
+        for id in iter
+        {
+            writeln!(f, " - entity#{} ", id)?
+        }
+        Ok(())
     }
 }
