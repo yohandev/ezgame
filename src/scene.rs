@@ -55,7 +55,7 @@ impl Scene
             let arch = &mut self.archetypes.inner_mut()[loc.archetype()];
             
             // update the location of the entity that was moved, if any
-            if let Some(moved) = arch.remove(loc)
+            if let Some(moved) = arch.remove(loc, true)
             {
                 self.entities.insert(unsafe { Entity::from_id(moved) }, loc);
             }
@@ -141,6 +141,69 @@ impl Scene
     pub fn has<T: Component>(&self, ent: Entity) -> bool
     {
         self.get::<T>(ent).is_some()
+    }
+
+    /// add components to an entity, if it exists
+    /// returns whether the operation was succesful
+    pub fn add<T: ComponentSet>(&mut self, ent: Entity, cmp: T) -> bool
+    {
+        // entity location
+        let loc = self.entities.get(ent);
+
+        // entity isn't alive
+        if loc == EntityLocation::NULL
+        {
+            false
+        }
+        else
+        {
+            // get the entity's current archetype
+            let arch = &mut self.archetypes.inner_mut()[loc.archetype()];
+
+            // archetype meta of the entity's current archetype
+            let mut meta = arch.meta().types();
+            
+            // get the entitity's current chunk
+            let chunk = &mut arch.chunks_mut()[loc.chunk()];
+
+            // get the `TypeId`s within the set being added
+            let add_meta = T::meta();
+
+            // go through types being added
+            for ty in add_meta
+            {
+                // if adding an existing component, override
+                if let Some(cmps) = chunk.try_components_mut_dyn(ty.id(), ty.size())
+                {
+                    unsafe
+                    {
+                        // pointer to entity's old component
+                        let ptr = cmps.as_mut_ptr().add(loc.index() * ty.size());
+
+                        // drop old component
+                        ty.drop(ptr);
+                    }
+                }
+                // entity didn't have component, add it to list
+                else
+                {
+                    meta.push(ty);
+                }
+            }
+            // needs to sort, since we're merging two `ComponentSet`s
+            meta.sort();
+
+            // // update the location of the entity that was moved, if any
+            // if let Some(moved) = arch.remove(loc)
+            // {
+            //     self.entities.insert(unsafe { Entity::from_id(moved) }, loc);
+            // }
+
+            // // remove entity from scene
+            // self.entities.remove(ent);
+
+            true
+        }
     }
 
     /// get an entity archetype within this scene, if it exists
