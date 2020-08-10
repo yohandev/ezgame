@@ -75,6 +75,44 @@ impl Scene
         }
     }
 
+    /// get the `impl Component` for the given entity, if it has
+    /// it
+    pub fn get_mut<T: Component>(&mut self, ent: Entity) -> Option<&mut T>
+    {
+        // entity location
+        let loc = self.entities.get(ent);
+
+        // entity isn't alive
+        if loc == EntityLocation::NULL
+        {
+            None
+        }
+        else
+        {
+            // get the chunk, which won't error even if the entity doesn't have
+            // the component as long as the entity location is valid
+            let chunk = &mut self.archetypes
+                .inner_mut()[loc.archetype] // get the entity's archetype
+                .chunks_mut()[loc.chunk];   // get the entity's chunk
+            
+            // prevent panic, if the entity doesn't have the component
+            if chunk.meta().contains::<T>()
+            {
+                Some(&mut chunk.components_mut::<T>()[loc.index])
+            }
+            else
+            {
+                None
+            }
+        }
+    }
+
+    /// does this `Entity` have the component?
+    pub fn has<T: Component>(&self, ent: Entity) -> bool
+    {
+        self.get::<T>(ent).is_some()
+    }
+
     /// get an entity archetype within this scene, if it exists
     pub fn archetype<T: ComponentSet>(&self) -> Option<&Archetype>
     {

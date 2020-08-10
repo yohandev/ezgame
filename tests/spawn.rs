@@ -66,6 +66,7 @@ fn spawn_cmp()
     println!("(Pos, Vel, Name) -> Name: {:?}", pos_vel_name_chunk.components::<Name>());
 }
 
+// note: this test might fail on some platforms due to floating point (in)equality
 #[test]
 fn spawn_then_get()
 {
@@ -91,6 +92,21 @@ fn spawn_then_get()
     assert_eq!(scene.get::<Pos>(ent3), Some(&Pos(10.0, 10.0, 10.0)));
     assert_eq!(scene.get::<Vel>(ent3), Some(&Vel(5.0, 5.0, 5.0)));
     assert_eq!(scene.get::<Name>(ent3), Some(&Name("Entity#3")));
+
+    // mutably borrow component(new scope)
+    {
+        let pos1 = scene
+            .get_mut::<Pos>(ent1)
+            .expect("can't get Pos mutably for ent1");
+
+        pos1.0 = 600.0;
+        pos1.2 = 500.0;
+    }
+    assert_eq!(scene.get::<Pos>(ent1), Some(&Pos(600.0, 1.0, 500.0)));
+
+    assert_eq!(scene.get::<Pos>(ent0), None);
+    assert_eq!(scene.get::<Pos>(ent2), Some(&Pos(1.0, -5.0, -2.0)));
+    assert_eq!(scene.get::<Pos>(ent3), Some(&Pos(10.0, 10.0, 10.0)));
 }
 
 // #[test]

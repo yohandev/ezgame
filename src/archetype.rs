@@ -255,6 +255,15 @@ impl Archetype
         &self.chunks
     }
 
+    /// get the chunks within this archetype
+    ///
+    /// mutable version is private to prevent manual `ArchetypeChunk`
+    /// pushing/popping
+    pub(crate) fn chunks_mut(&mut self) -> &mut Vec<ArchetypeChunk>
+    {
+        &mut self.chunks
+    }
+
     /// get the meta for this `Archetype` or `ArchetypeChunk`(they're the same)
     pub fn meta(&self) -> &ArchetypeMeta
     {
@@ -451,6 +460,24 @@ impl ArchetypeMap
     pub fn inner(&self) -> &Vec<Archetype>
     {
         &self.arch
+    }
+
+    /// get all the `Archetype`s within this map, in order of their
+    /// IDs
+    ///
+    /// this is useful to get an archetype by its ID:
+    /// ```rust
+    /// let loc: EntityLocation = ...;
+    /// 
+    /// // get the archetype by its ID
+    /// let arch = map.archetypes()[loc.archetype];
+    /// ```
+    ///
+    /// the mutable version is private to the crate to prevent
+    /// aritificial `Archetype` pushing/popping
+    pub(crate) fn inner_mut(&mut self) -> &mut Vec<Archetype>
+    {
+        &mut self.arch
     }
 }
 
