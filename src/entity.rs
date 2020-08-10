@@ -76,7 +76,7 @@ impl Entity
     /// normally this is undefined behaviour, because entities
     /// are obtained from `World::spawn` or queries, but is needed
     /// in internal operations
-    pub(crate) fn from_id(id: EntId) -> Self
+    pub unsafe fn from_id(id: EntId) -> Self
     {
         Self { id }
     }

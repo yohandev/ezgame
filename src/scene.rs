@@ -57,7 +57,7 @@ impl Scene
             // update the location of the entity that was moved, if any
             if let Some(moved) = arch.remove(loc)
             {
-                self.entities.insert(Entity::from_id(moved), loc);
+                self.entities.insert(unsafe { Entity::from_id(moved) }, loc);
             }
 
             // remove entity from scene

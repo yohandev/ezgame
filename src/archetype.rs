@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 use std::cell::UnsafeCell;
 use std::alloc::Layout;
 use std::ptr::NonNull;
@@ -20,7 +20,7 @@ pub struct Archetype
     /// list of chunk indices with free entity slots and zero shared components
     ///
     /// TODO: shared component to free chunk map of type `HashMap<..., Vec<ArchetypeChunkIndex>>
-    free: Vec<usize>,
+    free: HashSet<usize>,
 }
 
 /// a single, 16kb chunk in an archetype
@@ -162,7 +162,7 @@ impl Archetype
         // start with no chunks...
         let chunks = vec![];
         // ...no chunks therefore no free chunks
-        let free = vec![];
+        let free = HashSet::new();
 
         Self { meta, chunks, free }
     }
@@ -188,12 +188,12 @@ impl Archetype
         let len = 0;
 
         // mark the new chunk as free(which it will be)
-        self.free.push(self.chunks.len());
+        self.free.insert(self.chunks.len());
         // append the chunk to this archetype
         self.chunks.push(ArchetypeChunk { meta, data, len });
 
         // return the new chunk's index
-        *self.free.last().unwrap()
+        self.chunks.len() - 1
     }
 
     /// inserts an entity into this archetype, and returns the index where it was placed
@@ -203,13 +203,20 @@ impl Archetype
         // info for the entity location being returned
         let archetype = self.meta.id;
         let chunk = self.free
-            .last()
+            .iter()
+            .next()
             .copied()
             .unwrap_or_else(|| self.new_chunk());
         let index = self.chunks[chunk].len;
 
         // increment length
         self.chunks[chunk].len += 1;
+
+        // chunk is full
+        if self.chunks[chunk].len == self.meta.max
+        {
+            self.free.remove(&chunk);
+        }
 
         // insert entity ID
         self.chunks[chunk].entities_mut()[index] = e;
@@ -284,6 +291,9 @@ impl Archetype
 
         // decrease length of chunk
         chunk.len -= 1;
+
+        // chunk now has a free spot
+        self.free.insert(loc.chunk());
 
         // return the entity moved(which is now at the provided loc)
         moved
