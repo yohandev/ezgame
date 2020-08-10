@@ -29,7 +29,7 @@ pub struct EntityMap
 }
 
 /// the storage location of an entity's components
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct EntityLocation
 {
     archetype: usize,
@@ -39,9 +39,9 @@ pub struct EntityLocation
 
 /// a chunk within an entity map
 ///
-/// it keeps track of how many entity locations aren't `ENT_NULL`,
+/// it keeps track of how many entity locations aren't `NULL`,
 /// to be removed when `len` is `map.size()`
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct EntityMapChunk
 {
     map: [EntityLocation; Self::SIZE],
@@ -135,7 +135,7 @@ impl EntityMap
             None =>
             {
                 // create new chunk...
-                let mut chunk = EntityMapChunk::default();
+                let mut chunk = EntityMapChunk::new();
 
                 // ...populate with first location...
                 chunk.map[e_ind] = loc;
@@ -211,6 +211,15 @@ impl EntityMapChunk
 {
     /// number of locations per chunk
     const SIZE: usize = 16;
+
+    fn new() -> Self
+    {
+        Self
+        {
+            map: [EntityLocation::NULL; Self::SIZE],
+            len: 0,
+        }
+    }
 }
 
 impl EntityLocation
