@@ -313,16 +313,13 @@ impl Archetype
     }
 
     /// get the chunks within this archetype
-    pub fn chunks(&self) -> &Vec<ArchetypeChunk>
+    pub fn chunks(&self) -> &[ArchetypeChunk]
     {
         &self.chunks
     }
 
     /// get the chunks within this archetype
-    ///
-    /// mutable version is private to prevent manual `ArchetypeChunk`
-    /// pushing/popping
-    pub(crate) fn chunks_mut(&mut self) -> &mut Vec<ArchetypeChunk>
+    pub fn chunks_mut(&mut self) -> &mut [ArchetypeChunk]
     {
         &mut self.chunks
     }
@@ -513,7 +510,7 @@ impl ArchetypeMap
     /// // get the archetype by its ID
     /// let arch = map.archetypes()[loc.archetype];
     /// ```
-    pub fn inner(&self) -> &Vec<Archetype>
+    pub fn inner(&self) -> &[Archetype]
     {
         &self.arch
     }
@@ -528,10 +525,7 @@ impl ArchetypeMap
     /// // get the archetype by its ID
     /// let arch = map.archetypes()[loc.archetype];
     /// ```
-    ///
-    /// the mutable version is private to the crate to prevent
-    /// aritificial `Archetype` pushing/popping
-    pub(crate) fn inner_mut(&mut self) -> &mut Vec<Archetype>
+    pub fn inner_mut(&mut self) -> &mut [Archetype]
     {
         &mut self.arch
     }
