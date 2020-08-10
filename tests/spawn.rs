@@ -1,5 +1,16 @@
 use ezgame::*;
 
+#[derive(Debug, PartialEq)]
+struct Pos(f32, f32, f32);
+#[derive(Debug, PartialEq)]
+struct Vel(f32, f32, f32);
+#[derive(Debug, PartialEq)]
+struct Name(&'static str);
+
+impl Component for Pos { }
+impl Component for Vel { }
+impl Component for Name { }
+
 #[test]
 fn spawn_main_thread()
 {
@@ -23,17 +34,6 @@ fn spawn_main_thread()
 fn spawn_cmp()
 {
     let mut scene = Scene::default();
-
-    #[derive(Debug)]
-    struct Pos(f32, f32, f32);
-    #[derive(Debug)]
-    struct Vel(f32, f32, f32);
-    #[derive(Debug)]
-    struct Name(&'static str);
-
-    impl Component for Pos { }
-    impl Component for Vel { }
-    impl Component for Name { }
 
     let _ = scene.spawn(());
     let _ = scene.spawn((Pos(0.0, 1.0, 27.0), Vel(0.0, -9.8, 0.0)));
@@ -64,6 +64,33 @@ fn spawn_cmp()
     println!("(Pos, Vel, Name) -> Pos: {:?}", pos_vel_name_chunk.components::<Pos>());
     println!("(Pos, Vel, Name) -> Vel: {:?}", pos_vel_name_chunk.components::<Vel>());
     println!("(Pos, Vel, Name) -> Name: {:?}", pos_vel_name_chunk.components::<Name>());
+}
+
+#[test]
+fn spawn_then_get()
+{
+    let mut scene = Scene::default();
+
+    let ent0 = scene.spawn(());
+    let ent1 = scene.spawn((Pos(0.0, 1.0, 27.0), Vel(0.0, -9.8, 0.0)));
+    let ent2 = scene.spawn((Pos(1.0, -5.0, -2.0), Vel(10.0, 1.2, 5.3)));
+    let ent3 = scene.spawn((Pos(10.0, 10.0, 10.0), Vel(5.0, 5.0, 5.0), Name("Entity#3")));
+
+    assert_eq!(scene.get::<Pos>(ent0), None);
+    assert_eq!(scene.get::<Vel>(ent0), None);
+    assert_eq!(scene.get::<Name>(ent0), None);
+
+    assert_eq!(scene.get::<Pos>(ent1), Some(&Pos(0.0, 1.0, 27.0)));
+    assert_eq!(scene.get::<Vel>(ent1), Some(&Vel(0.0, -9.8, 0.0)));
+    assert_eq!(scene.get::<Name>(ent1), None);
+
+    assert_eq!(scene.get::<Pos>(ent2), Some(&Pos(1.0, -5.0, -2.0)));
+    assert_eq!(scene.get::<Vel>(ent2), Some(&Vel(10.0, 1.2, 5.3)));
+    assert_eq!(scene.get::<Name>(ent2), None);
+
+    assert_eq!(scene.get::<Pos>(ent3), Some(&Pos(10.0, 10.0, 10.0)));
+    assert_eq!(scene.get::<Vel>(ent3), Some(&Vel(5.0, 5.0, 5.0)));
+    assert_eq!(scene.get::<Name>(ent3), Some(&Name("Entity#3")));
 }
 
 // #[test]

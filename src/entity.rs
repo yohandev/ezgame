@@ -177,6 +177,34 @@ impl EntityMap
             }
         }
     }
+
+    /// get the `EntityLocation` from the `(Entity, Location)` pair in
+    /// this map. returns `EntityLocation::NULL` if it doesn't contain it
+    pub fn get(&self, e: Entity) -> EntityLocation
+    {
+        // index of entity within chunk
+        let e_ind = e.id() % EntityMapChunk::SIZE as u64;
+        // index(key) of chunk
+        let c_ind = e.id() - e_ind;
+        // (usize) index of entity within chunk
+        let e_ind = e_ind as usize;
+
+        // get chunk
+        match self.chunks.get(&c_ind)
+        {
+            // chunk exists -> check entity itself
+            Some(chunk) => chunk.map[e_ind],
+            // chunk doesn't exist -> entity cannot exist
+            None => EntityLocation::NULL
+        }
+    }
+
+    /// does this map contains the entity `e`?
+    /// basically, is the entity alive as far as this map knows?
+    pub fn contains(&self, e: Entity) -> bool
+    {
+        self.get(e) != EntityLocation::NULL
+    }
 }
 
 impl EntityMapChunk

@@ -1,4 +1,4 @@
-use crate::{ Entity, EntityMap, ComponentSet, ArchetypeMap, Archetype };
+use crate::{ Entity, EntityMap, EntityLocation, Component, ComponentSet, ArchetypeMap, Archetype };
 
 /// a container for entities and their components.
 ///
@@ -37,9 +37,47 @@ impl Scene
         ent
     }
 
+    /// is the entity alive and in this `Scene`?
+    pub fn contains(&self, ent: Entity) -> bool
+    {
+        self.entities.contains(ent)
+    }
+
+    /// get the `impl Component` for the given entity, if it has
+    /// it
+    pub fn get<T: Component>(&self, ent: Entity) -> Option<&T>
+    {
+        // entity location
+        let loc = self.entities.get(ent);
+
+        // entity isn't alive
+        if loc == EntityLocation::NULL
+        {
+            None
+        }
+        else
+        {
+            // get the chunk, which won't error even if the entity doesn't have
+            // the component as long as the entity location is valid
+            let chunk = &self.archetypes
+                .inner()[loc.archetype] // get the entity's archetype
+                .chunks()[loc.chunk];   // get the entity's chunk
+            
+            // prevent panic, if the entity doesn't have the component
+            if chunk.meta().contains::<T>()
+            {
+                Some(&chunk.components::<T>()[loc.index])
+            }
+            else
+            {
+                None
+            }
+        }
+    }
+
     /// get an entity archetype within this scene, if it exists
     pub fn archetype<T: ComponentSet>(&self) -> Option<&Archetype>
     {
         self.archetypes.get::<T>()
-    } 
+    }
 }

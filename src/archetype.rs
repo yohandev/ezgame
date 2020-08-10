@@ -242,8 +242,10 @@ impl Archetype
     /// component
     ///
     /// `loc` must be valid and `typeof(T)` must be within this archetype
-    pub(crate) fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
+    pub fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
     {
+        debug_assert_eq!(self.meta.id, loc.archetype, "attempting to access entity location outside this archetype!");
+
         self.chunks[loc.chunk].components_mut::<T>()[loc.index] = cmp;
     }
 
@@ -251,6 +253,12 @@ impl Archetype
     pub fn chunks(&self) -> &Vec<ArchetypeChunk>
     {
         &self.chunks
+    }
+
+    /// get the meta for this `Archetype` or `ArchetypeChunk`(they're the same)
+    pub fn meta(&self) -> &ArchetypeMeta
+    {
+        &self.meta
     }
 }
 
@@ -263,9 +271,7 @@ impl ArchetypeChunk
     pub fn components_dyn(&self, ty: TypeId, size: usize) -> &[u8]
     {
         // meta-data about the component being accessed
-        let meta = self.meta.cmp
-            .get(&ty)
-            .expect("attempting to access components not within this archetype!");
+        let meta = self.meta.get_dyn(ty);
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
@@ -281,9 +287,7 @@ impl ArchetypeChunk
     pub fn components_mut_dyn(&mut self, ty: TypeId, size: usize) -> &mut [u8]
     {
         // meta-data about the component being accessed
-        let meta = self.meta.cmp
-            .get(&ty)
-            .expect("attempting to access components not within this archetype!");
+        let meta = self.meta.get_dyn(ty);
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
@@ -301,9 +305,7 @@ impl ArchetypeChunk
     pub fn components<T: Component>(&self) -> &[T]
     {
         // meta-data about the component being accessed
-        let meta = self.meta.cmp
-            .get(&TypeId::of::<T>())
-            .expect("attempting to access components not within this archetype!");
+        let meta = self.meta.get::<T>();
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *const T };
@@ -321,9 +323,7 @@ impl ArchetypeChunk
     pub fn components_mut<T: Component>(&mut self) -> &mut [T]
     {
         // meta-data about the component being accessed
-        let meta = self.meta.cmp
-            .get(&TypeId::of::<T>())
-            .expect("attempting to access components not within this archetype!");
+        let meta = self.meta.get::<T>();
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *mut T };
@@ -352,6 +352,12 @@ impl ArchetypeChunk
 
         // create slice
         unsafe { std::slice::from_raw_parts_mut(ptr, self.len) }
+    }
+
+    /// get the meta for this `Archetype` or `ArchetypeChunk`(they're the same)
+    pub fn meta(&self) -> &ArchetypeMeta
+    {
+        &self.meta
     }
 }
 
@@ -423,6 +429,66 @@ impl ArchetypeMap
         self.map
             .get(&ty)
             .map(|id| &self.arch[*id])
+    }
+
+    /// get an archetype by its ID
+    /// id must be valid and in range
+    pub fn get_by_id(&self, id: usize) -> &Archetype
+    {
+        &self.arch[id]
+    }
+
+    /// get all the `Archetype`s within this map, in order of their
+    /// IDs
+    ///
+    /// this is useful to get an archetype by its ID:
+    /// ```rust
+    /// let loc: EntityLocation = ...;
+    /// 
+    /// // get the archetype by its ID
+    /// let arch = map.archetypes()[loc.archetype];
+    /// ```
+    pub fn inner(&self) -> &Vec<Archetype>
+    {
+        &self.arch
+    }
+}
+
+impl ArchetypeMeta
+{
+    /// see `ArchetypeMeta::contains`
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn contains_dyn(&self, id: TypeId) -> bool
+    {
+        self.cmp.contains_key(&id)
+    }
+
+    /// does this archetype contain the `Component`'s `TypeId`?
+    pub fn contains<T: Component>(&self) -> bool
+    {
+        self.contains_dyn(TypeId::of::<T>())
+    }
+
+    /// see `ArchetypeMeta::get`
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn get_dyn(&self, id: TypeId) -> &CmpMeta
+    {
+        self.cmp
+            .get(&id)
+            .expect("attempting to access components not within this archetype!")
+    }
+
+    /// get the component meta from a `Component` `TypeId`
+    ///
+    /// the component must be in this chunk, or the function will panic.
+    /// use `ArchetypeMeta::contains` to check
+    pub fn get<T: Component>(&self) -> &CmpMeta
+    {
+        self.get_dyn(TypeId::of::<T>())
     }
 }
 
