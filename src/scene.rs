@@ -87,21 +87,8 @@ impl Scene
         }
         else
         {
-            // get the chunk, which won't error even if the entity doesn't have
-            // the component as long as the entity location is valid
-            let chunk = &self.archetypes
-                .inner()[loc.archetype()] // get the entity's archetype
-                .chunks()[loc.chunk()];   // get the entity's chunk
-            
-            // prevent panic, if the entity doesn't have the component
-            if chunk.meta().contains::<T>()
-            {
-                Some(&chunk.components::<T>()[loc.index()])
-            }
-            else
-            {
-                None
-            }
+            // `Archetype::get` returns an option already
+            self.archetypes.inner()[loc.archetype()].get(loc)
         }
     }
 
@@ -119,21 +106,8 @@ impl Scene
         }
         else
         {
-            // get the chunk, which won't error even if the entity doesn't have
-            // the component as long as the entity location is valid
-            let chunk = &mut self.archetypes
-                .inner_mut()[loc.archetype()] // get the entity's archetype
-                .chunks_mut()[loc.chunk()];   // get the entity's chunk
-            
-            // prevent panic, if the entity doesn't have the component
-            if chunk.meta().contains::<T>()
-            {
-                Some(&mut chunk.components_mut::<T>()[loc.index()])
-            }
-            else
-            {
-                None
-            }
+            // `Archetype::get_mut` returns an option already
+            self.archetypes.inner_mut()[loc.archetype()].get_mut(loc)
         }
     }
 
@@ -148,77 +122,92 @@ impl Scene
     pub fn add<T: ComponentSet>(&mut self, ent: Entity, cmp: T) -> bool
     {
         // entity location
-        let loc = self.entities.get(ent);
+        let old_loc = self.entities.get(ent);
 
         // entity isn't alive
-        if loc == EntityLocation::NULL
+        if old_loc == EntityLocation::NULL
         {
             false
         }
         else
         {
-            // get the entity's current archetype
-            let arch = &mut self.archetypes.inner_mut()[loc.archetype()];
-
-            // archetype id + meta of the entity's current archetype
-            let (mut ids, mut meta) = arch.meta().types();
-            
-            // get the entitity's current chunk
-            let chunk = &mut arch.chunks_mut()[loc.chunk()];
-
-            // get the `TypeMeta`s within the set being added
-            let add_meta = T::meta();
-
-            // go through types being added
-            for ty in add_meta
+            // begin borrow old archetype...
+            let (metas, types, old_cmp) =
             {
-                // if adding an existing component, override
-                if let Some(cmps) = chunk.try_components_mut_dyn(ty.id(), ty.size())
-                {
-                    unsafe
-                    {
-                        // pointer to entity's old component
-                        let ptr = cmps.as_mut_ptr().add(loc.index() * ty.size());
+                // get the entity's current archetype
+                let old_arch = &mut self.archetypes.inner_mut()[old_loc.archetype()];
 
+                // sums the entity's current type[meta] + that of the components being added,
+                // with no overlap
+                let mut metas = old_arch
+                    .meta()
+                    .component_metas()
+                    .map(|n| *n)
+                    .collect::<Vec<_>>();
+                let mut types = old_arch
+                    .meta()
+                    .component_types()
+                    .map(|n| *n)
+                    .collect::<Vec<_>>();
+
+                // go through types being added
+                for ty in T::meta()
+                {
+                    // if adding an existing component, override
+                    if let Some(ptr) = old_arch.get_mut_dyn(old_loc, ty.id())
+                    {
                         // drop old component
-                        ty.drop(ptr);
+                        unsafe { ty.drop(ptr); }
+                    }
+                    // entity didn't have component, add it to list
+                    else
+                    {
+                        metas.push(ty);
+                        types.push(ty.id());
                     }
                 }
-                // entity didn't have component, add it to list
-                else
-                {
-                    meta.push(ty);
-                    ids.push(ty.id());
-                }
+                // needs to sort, since we're merging two `ComponentSet`s
+                metas.sort();
+                types.sort();
+
+                // vector of old components being moved
+                // (TypeMeta, *const u8) pair vector
+                let old_cmp = old_arch
+                    .meta()
+                    .component_metas()
+                    .map(|ty| (*ty, old_arch.get_dyn(old_loc, ty.id()).unwrap()))
+                    .collect::<Vec<_>>();
+
+                // used later in the function...
+                (metas, types, old_cmp)
+            };
+
+            // get or create archetype where the entity will live
+            let new_arch = self.archetypes.get_or_insert_dyn(&types, || (&metas).clone());
+
+            // insert entity into new archetype
+            let new_loc = new_arch.insert(ent.id());
+
+            // move *all* old components
+            for (ty, src) in old_cmp
+            {
+                let dst = new_arch.get_mut_dyn(new_loc, ty.id()).unwrap();
+                
+                unsafe { std::ptr::copy_nonoverlapping(src, dst, ty.size()); }
             }
-            // needs to sort, since we're merging two `ComponentSet`s
-            meta.sort();
-            ids.sort();
 
-            // // get or create archetype where the entity will live
-            // let new_arch = self.archetypes.get_or_insert_dyn(&ids, || (&meta).clone());
+            // insert the new components too
+            cmp.insert(new_arch, new_loc);
 
-            // // insert entity into new archetype
-            // let new_loc = new_arch.insert(ent.id());
+            // delete from old archetype and update the location of the entity
+            // that was moved, if any
+            if let Some(moved) = self.archetypes.inner_mut()[old_loc.archetype()].remove(old_loc, false)
+            {
+                self.entities.insert(unsafe { Entity::from_id(moved) }, old_loc);
+            }
 
-            // // move *all* old components...
-            // for ty in &meta
-            // {
-            //     // ...only if component existed
-            //     if let Some(cmps) = chunk.try_components_mut_dyn(ty.id(), ty.size())
-            //     {
-            //         new_arch.set_dyn(new_loc, ty, &cmps[loc.index() * ty.size()..])
-            //     }
-            // }
-
-            // // update the location of the entity that was moved, if any
-            // if let Some(moved) = arch.remove(loc)
-            // {
-            //     self.entities.insert(unsafe { Entity::from_id(moved) }, loc);
-            // }
-
-            // // remove entity from scene
-            // self.entities.remove(ent);
+            // update entity location
+            self.entities.insert(ent, new_loc);
 
             true
         }

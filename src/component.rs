@@ -60,7 +60,7 @@ macro_rules! impl_component_set
             #[allow(unused_variables)]
             fn insert(self, arch: &mut Archetype, loc: EntityLocation)
             {
-                $(arch.set(loc, self.$num);)*
+                $(*arch.get_mut(loc).unwrap() = self.$num;)*
             }
         }
     };

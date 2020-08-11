@@ -305,45 +305,54 @@ impl Archetype
         moved
     }
 
-    /// set the component data for an `EntityLocation` inside this archetype
+    /// get the component data for an `EntityLocation` inside this archetype
     ///
     /// this should be called directly after `Archetype::insert` and for every
     /// component
     ///
     /// `loc` must be valid and `typeof(T)` must be within this archetype
-    pub fn set<T: Component>(&mut self, loc: EntityLocation, cmp: T)
+    pub fn get<T: Component>(&self, loc: EntityLocation) -> Option<&T>
     {
         debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
 
-        self.chunks[loc.chunk()].components_mut::<T>()[loc.index()] = cmp;
+        Some(&self.chunks[loc.chunk()].components::<T>()?[loc.index()])
     }
 
-    /// see `Archetype::set`
+    /// get the component data for an `EntityLocation` inside this archetype
+    ///
+    /// this should be called directly after `Archetype::insert` and for every
+    /// component
+    ///
+    /// `loc` must be valid and `typeof(T)` must be within this archetype
+    pub fn get_mut<T: Component>(&mut self, loc: EntityLocation) -> Option<&mut T>
+    {
+        debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
+
+        Some(&mut self.chunks[loc.chunk()].components_mut::<T>()?[loc.index()])
+    }
+
+    /// see `Archetype::get`
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn set_dyn(&mut self, loc: EntityLocation, ty: &TypeMeta, cmp: &[u8])
+    pub fn get_dyn(&self, loc: EntityLocation, ty: TypeId) -> Option<*const u8>
     {
         debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
-        debug_assert_eq!(ty.size(), cmp.len(), "attempting to set to a component of the wrong size!");
 
-        let (src, dst) = unsafe
-        {
-            // pointer to entity location `loc` for the component type `ty`
-            let dst = self.chunks[loc.chunk()]
-                .components_mut_dyn(ty.id(), ty.size())
-                .as_mut_ptr()
-                .add(loc.index() * ty.size());
-
-            // source is just the input `cmp`
-            let src = cmp.as_ptr();
-
-            (src, dst)
-        };
-        
-        unsafe { std::ptr::copy_nonoverlapping(src, dst, ty.size()); }
+        Some(&self.chunks[loc.chunk()].components_dyn(ty)?[loc.index()])
     }
 
+    /// see `Archetype::get_mut`
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn get_mut_dyn(&mut self, loc: EntityLocation, ty: TypeId) -> Option<*mut u8>
+    {
+        debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
+
+        Some(&mut self.chunks[loc.chunk()].components_mut_dyn(ty)?[loc.index()])
+    }
+    
     /// get the chunks within this archetype
     pub fn chunks(&self) -> &[ArchetypeChunk]
     {
@@ -369,113 +378,47 @@ impl ArchetypeChunk
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn components_dyn(&self, ty: TypeId, size: usize) -> &[u8]
+    ///
+    /// the try_ flavor of functions returns an option instead of panicking
+    pub fn components_dyn(&self, ty: TypeId) -> Option<&[u8]>
     {
         // meta-data about the component being accessed
-        let meta = self.meta.get_dyn(ty);
+        let meta = self.meta.get_dyn(ty)?;
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
 
         // create slice
-        unsafe { std::slice::from_raw_parts(ptr, size * self.len) }
+        Some(unsafe { std::slice::from_raw_parts(ptr, meta.0.size() * self.len) })
     }
 
     /// see `ArchetypeChunk::components`
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn components_mut_dyn(&mut self, ty: TypeId, size: usize) -> &mut [u8]
+    ///
+    /// the try_ flavor of functions returns an option instead of panicking
+    pub fn components_mut_dyn(&mut self, ty: TypeId) -> Option<&mut [u8]>
     {
         // meta-data about the component being accessed
-        let meta = self.meta.get_dyn(ty);
+        let meta = self.meta.get_dyn(ty)?;
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
 
         // create slice
-        unsafe { std::slice::from_raw_parts_mut(ptr, size * self.len) }
+        Some(unsafe { std::slice::from_raw_parts_mut(ptr, meta.0.size() * self.len) })
     }
 
     /// returns a slice of components within this `ArchetypeChunk`. the `T` parameter
-    /// must `impl Component` AND be stored within this archetype, else the function
-    /// will panic.
+    /// must `impl Component` AND be stored within this archetype, or `None` is returned.
     ///
     /// the slice returned only contains the occupied components, not the entire capacity:
     /// `&[T].len() == chunk.len()`
-    pub fn components<T: Component>(&self) -> &[T]
+    pub fn components<T: Component>(&self) -> Option<&[T]>
     {
         // meta-data about the component being accessed
-        let meta = self.meta.get::<T>();
-
-        // pointer to the start of component being accessed
-        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *const T };
-
-        // create slice
-        unsafe { std::slice::from_raw_parts(ptr, self.len) }
-    }
-
-    /// returns a slice of components within this `ArchetypeChunk`. the `T` parameter
-    /// must `impl Component` AND be stored within this archetype, else the function
-    /// will panic.
-    ///
-    /// the slice returned only contains the occupied components, not the entire capacity:
-    /// `&[T].len() == chunk.len()`
-    pub fn components_mut<T: Component>(&mut self) -> &mut [T]
-    {
-        // meta-data about the component being accessed
-        let meta = self.meta.get::<T>();
-
-        // pointer to the start of component being accessed
-        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *mut T };
-
-        // create slice
-        unsafe { std::slice::from_raw_parts_mut(ptr, self.len) }
-    }
-
-    /// see `ArchetypeChunk::components`
-    ///
-    /// the _dyn flavor of functions is for scripting languages, where runtime
-    /// types are used
-    ///
-    /// the try_ flavor of functions returns an option instead of panicking
-    pub fn try_components_dyn(&self, ty: TypeId, size: usize) -> Option<&[u8]>
-    {
-        // meta-data about the component being accessed
-        let meta = self.meta.try_get_dyn(ty)?;
-
-        // pointer to the start of component being accessed
-        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
-
-        // create slice
-        Some(unsafe { std::slice::from_raw_parts(ptr, size * self.len) })
-    }
-
-    /// see `ArchetypeChunk::components`
-    ///
-    /// the _dyn flavor of functions is for scripting languages, where runtime
-    /// types are used
-    ///
-    /// the try_ flavor of functions returns an option instead of panicking
-    pub fn try_components_mut_dyn(&mut self, ty: TypeId, size: usize) -> Option<&mut [u8]>
-    {
-        // meta-data about the component being accessed
-        let meta = self.meta.try_get_dyn(ty)?;
-
-        // pointer to the start of component being accessed
-        let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) };
-
-        // create slice
-        Some(unsafe { std::slice::from_raw_parts_mut(ptr, size * self.len) })
-    }
-
-    /// see `ArchetypeChunk::components`
-    ///
-    /// the try_ flavor of functions returns an option instead of panicking
-    pub fn try_components<T: Component>(&self) -> Option<&[T]>
-    {
-        // meta-data about the component being accessed
-        let meta = self.meta.try_get::<T>()?;
+        let meta = self.meta.get::<T>()?;
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *const T };
@@ -484,13 +427,15 @@ impl ArchetypeChunk
         Some(unsafe { std::slice::from_raw_parts(ptr, self.len) })
     }
 
-    /// see `ArchetypeChunk::components`
+    /// returns a slice of components within this `ArchetypeChunk`. the `T` parameter
+    /// must `impl Component` AND be stored within this archetype, or `None` is returned.
     ///
-    /// the try_ flavor of functions returns an option instead of panicking
-    pub fn try_components_mut<T: Component>(&mut self) -> Option<&mut [T]>
+    /// the slice returned only contains the occupied components, not the entire capacity:
+    /// `&[T].len() == chunk.len()`
+    pub fn components_mut<T: Component>(&mut self) -> Option<&mut [T]>
     {
         // meta-data about the component being accessed
-        let meta = self.meta.try_get::<T>()?;
+        let meta = self.meta.get::<T>()?;
 
         // pointer to the start of component being accessed
         let ptr = unsafe { (*self.data.get()).as_ptr().add(meta.1) as *mut T };
@@ -650,56 +595,31 @@ impl ArchetypeMeta
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn get_dyn(&self, id: TypeId) -> &CmpMeta
-    {
-        self.cmp
-            .get(&id)
-            .expect("attempting to access components not within this archetype!")
-    }
-
-    /// get the component meta from a `Component` `TypeId`
-    ///
-    /// the component must be in this chunk, or the function will panic.
-    /// use `ArchetypeMeta::contains` to check
-    pub fn get<T: Component>(&self) -> &CmpMeta
-    {
-        self.get_dyn(TypeId::of::<T>())
-    }
-
-    /// see `ArchetypeMeta::try_get`
-    ///
-    /// the _dyn flavor of functions is for scripting languages, where runtime
-    /// types are used
-    pub fn try_get_dyn(&self, id: TypeId) -> Option<&CmpMeta>
+    pub fn get_dyn(&self, id: TypeId) -> Option<&CmpMeta>
     {
         self.cmp.get(&id)
     }
 
-    /// try and get the component meta from a `Component` `TypeId`
+    /// get the component meta from a `Component` `TypeId`
     ///
-    /// the component must be in this chunk, or the function will return none.
-    /// alternative to `ArchetypeMeta::get`, which just panics
-    pub fn try_get<T: Component>(&self) -> Option<&CmpMeta>
+    /// the component must be in this chunk, or the function returns `None`.
+    pub fn get<T: Component>(&self) -> Option<&CmpMeta>
     {
-        self.try_get_dyn(TypeId::of::<T>())
+        self.get_dyn(TypeId::of::<T>())
     }
 
-    /// returns a copy of the `TypeMeta`s and `TypeId`s within this `ArchetypeMeta`,
-    /// in arbitrary order
-    ///
-    /// this is basically like collecting the (key, value) pairs in this meta
-    pub fn types(&self) -> (Vec<TypeId>, Vec<TypeMeta>)
+    /// get the `TypeId` of the components stored in this `Archetype`
+    pub fn component_types(&self) -> impl Iterator<Item = &TypeId>
     {
-        let key = self.cmp
-            .keys()
-            .map(|ty| *ty)
-            .collect();
-        let val = self.cmp
-            .values()
-            .map(|cmp_meta| cmp_meta.0)
-            .collect();
+        self.cmp.keys()
+    }
 
-        (key, val)
+    /// get the `TypeMeta` of the components stored in this `Archetype`
+    pub fn component_metas(&self) -> impl Iterator<Item = &TypeMeta>
+    {
+        self.cmp
+            .values()
+            .map(|(meta, _)| meta)
     }
 }
 
