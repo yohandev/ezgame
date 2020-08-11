@@ -160,13 +160,13 @@ impl Scene
             // get the entity's current archetype
             let arch = &mut self.archetypes.inner_mut()[loc.archetype()];
 
-            // archetype meta of the entity's current archetype
-            let mut meta = arch.meta().types();
+            // archetype id + meta of the entity's current archetype
+            let (mut ids, mut meta) = arch.meta().types();
             
             // get the entitity's current chunk
             let chunk = &mut arch.chunks_mut()[loc.chunk()];
 
-            // get the `TypeId`s within the set being added
+            // get the `TypeMeta`s within the set being added
             let add_meta = T::meta();
 
             // go through types being added
@@ -188,10 +188,28 @@ impl Scene
                 else
                 {
                     meta.push(ty);
+                    ids.push(ty.id());
                 }
             }
             // needs to sort, since we're merging two `ComponentSet`s
             meta.sort();
+            ids.sort();
+
+            // // get or create archetype where the entity will live
+            // let new_arch = self.archetypes.get_or_insert_dyn(&ids, || (&meta).clone());
+
+            // // insert entity into new archetype
+            // let new_loc = new_arch.insert(ent.id());
+
+            // // move *all* old components...
+            // for ty in &meta
+            // {
+            //     // ...only if component existed
+            //     if let Some(cmps) = chunk.try_components_mut_dyn(ty.id(), ty.size())
+            //     {
+            //         new_arch.set_dyn(new_loc, ty, &cmps[loc.index() * ty.size()..])
+            //     }
+            // }
 
             // // update the location of the entity that was moved, if any
             // if let Some(moved) = arch.remove(loc)

@@ -318,6 +318,32 @@ impl Archetype
         self.chunks[loc.chunk()].components_mut::<T>()[loc.index()] = cmp;
     }
 
+    /// see `Archetype::set`
+    ///
+    /// the _dyn flavor of functions is for scripting languages, where runtime
+    /// types are used
+    pub fn set_dyn(&mut self, loc: EntityLocation, ty: &TypeMeta, cmp: &[u8])
+    {
+        debug_assert_eq!(self.meta.id, loc.archetype(), "attempting to access entity location outside this archetype!");
+        debug_assert_eq!(ty.size(), cmp.len(), "attempting to set to a component of the wrong size!");
+
+        let (src, dst) = unsafe
+        {
+            // pointer to entity location `loc` for the component type `ty`
+            let dst = self.chunks[loc.chunk()]
+                .components_mut_dyn(ty.id(), ty.size())
+                .as_mut_ptr()
+                .add(loc.index() * ty.size());
+
+            // source is just the input `cmp`
+            let src = cmp.as_ptr();
+
+            (src, dst)
+        };
+        
+        unsafe { std::ptr::copy_nonoverlapping(src, dst, ty.size()); }
+    }
+
     /// get the chunks within this archetype
     pub fn chunks(&self) -> &[ArchetypeChunk]
     {
@@ -658,13 +684,22 @@ impl ArchetypeMeta
         self.try_get_dyn(TypeId::of::<T>())
     }
 
-    /// returns a copy of the types within this `ArchetypeMeta`
-    pub fn types(&self) -> Vec<TypeMeta>
+    /// returns a copy of the `TypeMeta`s and `TypeId`s within this `ArchetypeMeta`,
+    /// in arbitrary order
+    ///
+    /// this is basically like collecting the (key, value) pairs in this meta
+    pub fn types(&self) -> (Vec<TypeId>, Vec<TypeMeta>)
     {
-        self.cmp
+        let key = self.cmp
+            .keys()
+            .map(|ty| *ty)
+            .collect();
+        let val = self.cmp
             .values()
             .map(|cmp_meta| cmp_meta.0)
-            .collect()
+            .collect();
+
+        (key, val)
     }
 }
 
