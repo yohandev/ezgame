@@ -1,6 +1,4 @@
-use std::any::TypeId;
-
-use crate::{ Archetype, EntityLocation, TypeMeta };
+use crate::{ Archetype, EntityLocation, Type };
 
 /// non-shared component trait
 pub trait Component: Send + Sync + 'static { }
@@ -13,13 +11,14 @@ pub trait Component: Send + Sync + 'static { }
 pub trait ComponentSet
 {
     /// returns a sorted vector of the types inside this component set
-    fn ty() -> Vec<TypeId>;
-
-    /// returns a sorted vector of the type meta inside this component set
     ///
-    /// used on archetype creation, and the returned `Vec` must be sorted via
-    /// `TypeMeta`'s `Ord` trait
-    fn meta() -> Vec<TypeMeta>;
+    /// uses:
+    /// - finding an archetype, based off the hash of the slice returned
+    /// - creating an archetype, using the meta inside the slice
+    ///
+    /// it's highly important that the slice is sorted via `Type`'s `Ord`
+    /// trait implementation(reverse-alignment then type id)
+    fn ty() -> Vec<Type>;
 
     /// insert the `Component` data from this set into the archetype at the given
     /// `EntityLocation`
@@ -33,24 +32,12 @@ macro_rules! impl_component_set
     {
         impl<$($name: Component),*> ComponentSet for ($($name,)*)
         {
-            fn ty() -> Vec<TypeId>
+            fn ty() -> Vec<Type>
             {
                 // complete list of types in arbitrary order
-                let mut ty = vec![$(TypeId::of::<$name>()),*];
+                let mut ty = vec![$(Type::of::<$name>()),*];
 
-                // sort by ID
-                ty.sort_unstable();
-
-                // return sorted vector
-                ty
-            }
-
-            fn meta() -> Vec<TypeMeta>
-            {
-                // complete list of types in arbitrary order
-                let mut ty = vec![$(TypeMeta::of::<$name>()),*];
-
-                // sort by reverse-alignment, then ID
+                // sort
                 ty.sort_unstable();
 
                 // return sorted vector

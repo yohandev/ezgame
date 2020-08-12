@@ -2,10 +2,9 @@ use std::collections::{ HashMap, HashSet };
 use std::cell::UnsafeCell;
 use std::alloc::Layout;
 use std::ptr::NonNull;
-use std::any::TypeId;
 use std::rc::Rc;
 
-use crate::{ EntId, EntityLocation, Component, ComponentSet, TypeMeta };
+use crate::{ EntId, EntityLocation, Component, ComponentSet, Type, TypeId };
 
 #[derive(Debug)]
 pub struct Archetype
@@ -97,7 +96,7 @@ pub struct ArchetypeMap
 /// component `A` has offset of `6` and B of `13`. the chunk can accomodate
 /// for exactly n amounts of A components and n amounts of B components, no more
 /// no less. offset considers the type's alignments too
-type CmpMeta = (TypeMeta, usize);
+type CmpMeta = (Type, usize);
 
 impl Archetype
 {
@@ -105,7 +104,7 @@ impl Archetype
     pub const CHUNK_SIZE: usize = 16_000;
 
     /// creates a new archetype from a list of (maybe unsorted) types
-    fn new(id: usize, ty: Vec<TypeMeta>) -> Self
+    fn new(id: usize, ty: Vec<Type>) -> Self
     {
         // archetype meta...
         let meta =
@@ -483,7 +482,7 @@ impl ArchetypeMap
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
     pub fn get_or_insert_dyn<F>(&mut self, ty: &Vec<TypeId>, meta: F) -> &mut Archetype
-        where F: FnOnce() -> Vec<TypeMeta>
+        where F: FnOnce() -> Vec<Type>
     {
         let id = match self.map.get_mut(ty)
         {
@@ -508,9 +507,10 @@ impl ArchetypeMap
     /// get an archetype or insert it into `self`
     pub fn get_or_insert<T: ComponentSet>(&mut self) -> &mut Archetype
     {
-        // get the `TypeId`s within the set
+        // get the `Type`s within the set
         let ty = T::ty();
 
+        
         let id = match self.map.get_mut(&ty)
         {
             Some(i) => *i,
