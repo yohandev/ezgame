@@ -1,13 +1,17 @@
 use std::cell::UnsafeCell;
-use std::alloc::Layout;
 use std::ptr::NonNull;
+use std::rc::Rc;
 
-use super::Archetype;
+use super::{ Archetype, ArchetypeMeta };
+use crate::Entity;
 
 /// a single, 16kb chunk in an archetype
 #[derive(Debug)]
 pub struct ArchetypeChunk
 {
+    /// meta-data about this chunk's parent `Archetype`, which is shared with
+    /// it too
+    meta: Rc<ArchetypeMeta>,
     /// ~16kb chunk of packed `EntId` + `impl Component`
     ///
     /// `*data.get()[0]` is the first entity ID, therefore, `data.get()`
@@ -34,8 +38,10 @@ impl ArchetypeChunk
     // returns the chunk's index
     pub(super) fn append_to(arch: &mut Archetype) -> usize
     {
+        // clone the archetype meta shared reference
+        let meta = Rc::clone(&arch.meta);
         // first get a well-aligned layout
-        let layout = arch.meta.layout;
+        let layout = meta.layout;
         // make a heap allocation and get the pointer
         let ptr = unsafe
         {
@@ -50,9 +56,48 @@ impl ArchetypeChunk
         // mark the new chunk as free(which it will be)
         arch.free.insert(arch.chunks.len());
         // append the chunk to the archetype
-        arch.chunks.push(ArchetypeChunk { data, len });
+        arch.chunks.push(ArchetypeChunk { meta, data, len });
 
         // return the new chunk's index
         arch.chunks.len() - 1
+    }
+
+    /// returns a slice of entity IDs within this chunk. the slice returned only contains the
+    /// occupied entity slots, not the entire capacity: `&[Entity].len() == chunk.len()`
+    pub fn entities(&self) -> &[Entity]
+    {
+        unsafe
+        {
+            // pointer to the start of entity IDs
+            let ptr = (*self.data.get()).as_ptr() as *const Entity;
+
+            // create slice
+            std::slice::from_raw_parts(ptr, self.len)
+        }
+    }
+
+    /// returns a slice of entity IDs within this chunk. the slice returned only contains the
+    /// occupied entity slots, not the entire capacity: `&[Entity].len() == chunk.len()`
+    pub fn entities_mut(&mut self) -> &mut [Entity]
+    {
+        unsafe
+        {
+            // pointer to the start of entity IDs
+            let ptr = (*self.data.get()).as_ptr() as *mut Entity;
+
+            // create slice
+            std::slice::from_raw_parts_mut(ptr, self.len)
+        }
+    }
+}
+
+impl Drop for ArchetypeChunk
+{
+    fn drop(&mut self)
+    {
+        unsafe
+        {
+            std::alloc::dealloc((*self.data.get()).as_ptr(), self.meta.layout);
+        }
     }
 }
