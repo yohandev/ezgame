@@ -62,6 +62,44 @@ impl CmpId
     }
 }
 
+impl CmpMeta
+{
+    /// get this component type's unique identifier
+    #[inline]
+    pub fn id(&self) -> CmpId
+    {
+        self.id
+    }
+
+    /// get this component type's size, in bytes
+    #[inline]
+    pub fn size_u32(&self) -> u32
+    {
+        self.size
+    }
+
+    /// get this component type's alignment, in bytes
+    #[inline]
+    pub fn alignment_u32(&self) -> u32
+    {
+        self.align
+    }
+
+    /// get this component type's size, in bytes
+    #[inline]
+    pub fn size(&self) -> usize
+    {
+        self.size as usize
+    }
+
+    /// get this component type's alignment, in bytes
+    #[inline]
+    pub fn alignment(&self) -> usize
+    {
+        self.align as usize
+    }
+}
+
 impl PartialOrd for CmpMeta
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering>
