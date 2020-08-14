@@ -1,10 +1,10 @@
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashSet;
 use std::cell::UnsafeCell;
 use std::alloc::Layout;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
-use crate::{ EntId, EntityLocation, Component, ComponentSet, Type, TypeId };
+use crate::{ EntId, EntityLocation, Component, ComponentSet, Type, TypeId, UnsafeMap };
 
 #[derive(Debug)]
 pub struct Archetype
@@ -55,7 +55,7 @@ pub struct ArchetypeMeta
     /// index of this archetype in the `Scene`'s archetype vector
     id: usize,
     /// meta-data about the components' types stored in this archetype
-    cmp: HashMap<TypeId, CmpMeta>,
+    cmp: UnsafeMap<TypeId, CmpMeta>,
     /// (cached) max entities that can be stored in a single chunk within
     /// this archetype
     ///
@@ -76,7 +76,7 @@ pub struct ArchetypeMap
     /// reference an archetype
     arch: Vec<Archetype>,
     /// maps sorted `Vec<TypeMeta>` to an archetype index in `self.arch`
-    map: HashMap<Vec<TypeId>, usize>,
+    map: UnsafeMap<Vec<TypeId>, usize>,
 }
 
 /// meta-data about an arbitrary component type
@@ -104,7 +104,7 @@ impl Archetype
     pub const CHUNK_SIZE: usize = 16_000;
 
     /// creates a new archetype from a list of (maybe unsorted) types
-    fn new(id: usize, ty: Vec<Type>) -> Self
+    fn new(id: usize, ty: &Vec<Type>) -> Self
     {
         // archetype meta...
         let meta =
@@ -132,7 +132,7 @@ impl Archetype
                 let mut alloc = std::mem::size_of::<EntId>() * max;
                 // meta...
                 // ...will have exact same size as `ty` argument
-                let mut meta = HashMap::with_capacity(ty.len());
+                let mut meta = UnsafeMap::with_capacity(ty.len());
 
                 for t in ty
                 {
@@ -140,7 +140,7 @@ impl Archetype
                     alloc += (t.alignment() - (alloc % t.alignment())) % t.alignment();
 
                     // add to meta
-                    meta.insert(t.id(), (t, alloc));
+                    meta.insert(t.id(), (t.clone(), alloc));
                     
                     // component data(increment alloc_size)
                     alloc += t.size() * max;
@@ -481,10 +481,9 @@ impl ArchetypeMap
     ///
     /// the _dyn flavor of functions is for scripting languages, where runtime
     /// types are used
-    pub fn get_or_insert_dyn<F>(&mut self, ty: &Vec<TypeId>, meta: F) -> &mut Archetype
-        where F: FnOnce() -> Vec<Type>
+    pub fn get_or_insert_dyn(&mut self, ty: &Vec<Type>) -> &mut Archetype
     {
-        let id = match self.map.get_mut(ty)
+        let id = match unsafe { self.map.get_mut(ty) }
         {
             Some(i) => *i,
             None =>
@@ -492,9 +491,15 @@ impl ArchetypeMap
                 // ID of the new archetype
                 let id = self.arch.len();
 
+                // Vec<TypeId> used in archetype map
+                let key = ty
+                    .iter()
+                    .map(|t| t.id())
+                    .collect();
+
                 // create new archetype
-                self.arch.push(Archetype::new(id, meta()));
-                self.map.insert(ty.clone(), id);
+                self.map.insert(key, id);
+                self.arch.push(Archetype::new(id, ty));
 
                 // return ID of the new archetype
                 id
@@ -511,7 +516,7 @@ impl ArchetypeMap
         let ty = T::ty();
 
         
-        let id = match self.map.get_mut(&ty)
+        let id = match unsafe { self.map.get_mut(&ty) }
         {
             Some(i) => *i,
             None =>
@@ -519,9 +524,15 @@ impl ArchetypeMap
                 // ID of the new archetype
                 let id = self.arch.len();
 
+                // Vec<TypeId> used in archetype map
+                let key = ty
+                    .iter()
+                    .map(|t| t.id())
+                    .collect();
+
                 // create new archetype
-                self.arch.push(Archetype::new(id, T::meta()));
-                self.map.insert(ty, id);
+                self.map.insert(key, id);
+                self.arch.push(Archetype::new(id, &ty));
 
                 // return ID of the new archetype
                 id
@@ -538,9 +549,12 @@ impl ArchetypeMap
         let ty = T::ty();
 
         // get the archetype if it's there
-        self.map
-            .get(&ty)
-            .map(|id| &self.arch[*id])
+        unsafe
+        {
+            self.map
+                .get(&ty)
+                .map(|id| &self.arch[*id])
+        }
     }
 
     /// get all the `Archetype`s within this map, in order of their
@@ -582,7 +596,7 @@ impl ArchetypeMeta
     /// types are used
     pub fn contains_dyn(&self, id: TypeId) -> bool
     {
-        self.cmp.contains_key(&id)
+        unsafe { self.cmp.contains_key(&id) }
     }
 
     /// does this archetype contain the `Component`'s `TypeId`?
@@ -597,7 +611,7 @@ impl ArchetypeMeta
     /// types are used
     pub fn get_dyn(&self, id: TypeId) -> Option<&CmpMeta>
     {
-        self.cmp.get(&id)
+        unsafe { self.cmp.get(&id) }
     }
 
     /// get the component meta from a `Component` `TypeId`
@@ -608,14 +622,8 @@ impl ArchetypeMeta
         self.get_dyn(TypeId::of::<T>())
     }
 
-    /// get the `TypeId` of the components stored in this `Archetype`
-    pub fn component_types(&self) -> impl Iterator<Item = &TypeId>
-    {
-        self.cmp.keys()
-    }
-
-    /// get the `TypeMeta` of the components stored in this `Archetype`
-    pub fn component_metas(&self) -> impl Iterator<Item = &TypeMeta>
+    /// get the `Type`s of the components stored in this `Archetype`
+    pub fn types(&self) -> impl Iterator<Item = &Type>
     {
         self.cmp
             .values()

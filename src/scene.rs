@@ -132,26 +132,21 @@ impl Scene
         else
         {
             // begin borrow old archetype...
-            let (metas, types, old_cmp) =
+            let (metas, old_cmp) =
             {
                 // get the entity's current archetype
                 let old_arch = &mut self.archetypes.inner_mut()[old_loc.archetype()];
 
-                // sums the entity's current type[meta] + that of the components being added,
+                // sums the entity's current types + that of the components being added,
                 // with no overlap
                 let mut metas = old_arch
                     .meta()
-                    .component_metas()
-                    .map(|n| *n)
-                    .collect::<Vec<_>>();
-                let mut types = old_arch
-                    .meta()
-                    .component_types()
-                    .map(|n| *n)
+                    .types()
+                    .map(|n| n.clone())
                     .collect::<Vec<_>>();
 
                 // go through types being added
-                for ty in T::meta()
+                for ty in T::ty()
                 {
                     // if adding an existing component, override
                     if let Some(ptr) = old_arch.get_mut_dyn(old_loc, ty.id())
@@ -163,27 +158,25 @@ impl Scene
                     else
                     {
                         metas.push(ty);
-                        types.push(ty.id());
                     }
                 }
                 // needs to sort, since we're merging two `ComponentSet`s
                 metas.sort();
-                types.sort();
 
                 // vector of old components being moved
-                // (TypeMeta, *const u8) pair vector
+                // (Type, *const u8) pair vector
                 let old_cmp = old_arch
                     .meta()
-                    .component_metas()
-                    .map(|ty| (*ty, old_arch.get_dyn(old_loc, ty.id()).unwrap()))
+                    .types()
+                    .map(|ty| (ty.clone(), old_arch.get_dyn(old_loc, ty.id()).unwrap()))
                     .collect::<Vec<_>>();
 
                 // used later in the function...
-                (metas, types, old_cmp)
+                (metas, old_cmp)
             };
 
             // get or create archetype where the entity will live
-            let new_arch = self.archetypes.get_or_insert_dyn(&types, || (&metas).clone());
+            let new_arch = self.archetypes.get_or_insert_dyn(&metas);
 
             // insert entity into new archetype
             let new_loc = new_arch.insert(ent.id());
