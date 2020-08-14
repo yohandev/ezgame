@@ -49,3 +49,57 @@ unsafe fn drop_ptr<T>(ptr: *mut u8)
 {
     ptr.cast::<T>().drop_in_place()
 }
+
+impl CmpId
+{
+    /// creates a new component ID instance from its inner u64. this should
+    /// only be called by the `#[derive(Component)]` implementation, hence why
+    /// it's unsafe.
+    #[allow(dead_code)]
+    pub const unsafe fn from_u64(n: u64) -> Self
+    {
+        Self(n)
+    }
+}
+
+impl PartialOrd for CmpMeta
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering>
+    {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl PartialEq for CmpMeta
+{
+    fn eq(&self, other: &Self) -> bool
+    {
+        self.id.eq(&other.id)
+    }
+}
+
+impl Ord for CmpMeta
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering
+    {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl Eq for CmpMeta { }
+
+impl PartialOrd<CmpId> for CmpMeta
+{
+    fn partial_cmp(&self, other: &CmpId) -> Option<std::cmp::Ordering>
+    {
+        self.id.partial_cmp(other)
+    }
+}
+
+impl PartialEq<CmpId> for CmpMeta
+{
+    fn eq(&self, other: &CmpId) -> bool
+    {
+        self.id.eq(other)
+    }
+}
