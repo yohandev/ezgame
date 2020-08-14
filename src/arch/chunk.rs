@@ -1,16 +1,13 @@
 use std::cell::UnsafeCell;
+use std::alloc::Layout;
 use std::ptr::NonNull;
-use std::rc::Rc;
 
-use super::ArchetypeMeta;
+use super::Archetype;
 
 /// a single, 16kb chunk in an archetype
 #[derive(Debug)]
 pub struct ArchetypeChunk
 {
-    /// meta-data about this chunk's parent `Archetype`, which is shared with
-    /// it too
-    meta: Rc<ArchetypeMeta>,
     /// ~16kb chunk of packed `EntId` + `impl Component`
     ///
     /// `*data.get()[0]` is the first entity ID, therefore, `data.get()`
@@ -23,13 +20,39 @@ pub struct ArchetypeChunk
     ///     - `B` = some component data B
     ///     - `~` = free space
     ///     - `*` = padding for alignment
-    data: UnsafeCell<NonNull<u8>>,
+    pub(super) data: UnsafeCell<NonNull<u8>>,
     /// number of entities currently stored in this chunk
-    len: usize,
+    pub(super) len: usize,
 }
 
 impl ArchetypeChunk
 {
     /// target size, in bytes, of a single chuk within an archetype(16kb)
     pub const TARGET_SIZE: usize = 16_000;
+
+    // create a new chunk aligned to its parent archetype, then append it.
+    // returns the chunk's index
+    pub(super) fn append_to(arch: &mut Archetype) -> usize
+    {
+        // first get a well-aligned layout
+        let layout = arch.meta.layout;
+        // make a heap allocation and get the pointer
+        let ptr = unsafe
+        {
+            std::alloc::alloc(layout).cast::<u8>()
+        };
+        // make a cell out of the pointer
+        let data = UnsafeCell::new(NonNull::new(ptr).unwrap());
+
+        // chunk starts empty(no entities)
+        let len = 0;
+
+        // mark the new chunk as free(which it will be)
+        arch.free.insert(arch.chunks.len());
+        // append the chunk to the archetype
+        arch.chunks.push(ArchetypeChunk { data, len });
+
+        // return the new chunk's index
+        arch.chunks.len() - 1
+    }
 }

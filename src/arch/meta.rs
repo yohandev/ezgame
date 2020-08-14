@@ -4,30 +4,29 @@ use std::alloc::Layout;
 use crate::{ CmpId, CmpMeta, Entity };
 use super::ArchetypeChunk;
 
-/// meta-data about an archetype, which is shared(via `Rc`) between a parent `Archetype`
-/// and its `ArchetypeChunk` children. this is caclulated once and never altered in
+/// meta-data about an archetype, this is caclulated once and never altered in
 /// the `Archetype::new` constructor
 #[derive(Debug)]
 pub struct ArchetypeMeta
 {
     /// index of this archetype in the `Scene`'s archetype vector
-    id: usize,
+    pub(super) id: usize,
     /// (meta-data, offset) about the components' types stored in this archetype
-    cmp: HashMap<CmpId, (CmpMeta, usize)>,
+    pub(super) cmp: HashMap<CmpId, (CmpMeta, usize)>,
     /// (cached) max entities that can be stored in a single chunk within
     /// this archetype
     ///
     /// a chunk stores the exact same amount of components between varying
     /// types, with no overlap inside roughly 16kb
-    max: usize,
+    pub(super) max: usize,
     /// (cached) layout for every chunk allocations for this archetype
-    layout: Layout,
+    pub(super) layout: Layout,
 }
 
 impl ArchetypeMeta
 {
     /// create a new archetype meta from a sorted vector of component meta
-    pub fn new(id: usize, types: &Vec<CmpMeta>) -> Self
+    pub(super) fn new(id: usize, types: &Vec<CmpMeta>) -> Self
     {
         // assert types are sorted
         debug_assert!
