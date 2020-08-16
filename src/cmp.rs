@@ -17,6 +17,34 @@ pub trait Component: Sync + Send + Sized + 'static
     };
 }
 
+/// a tuple of non-duplicate, arbitrarily ordered `Component` types
+/// and `SharedComponent` types
+pub trait CmpSet
+{
+    /// get the component type IDs in this component set, sorted via the `Ord`
+    /// trait on `CmpId`.
+    ///
+    /// takes a `FnOnce` with the actual IDs as parameter because the
+    /// following isn't feasible in Rust:
+    /// ```rust
+    /// // we don't want to copy the &[CmpId] slice everytime we get the
+    /// // components in this set
+    /// fn types(&self) -> &[CmpId]
+    /// {
+    ///     &[A::ID, B::ID] // err: cannot return borrow to temporary value
+    /// }
+    /// ```
+    /// for static bundles, this makes zero difference. for dynamic bundles,
+    /// however, they can cache a `Vec<CmpId>` in self
+    ///
+    /// the `FnOnce` returns some type T for convenience in internal implementations
+    fn types<T>(&self, f: impl FnOnce(&[CmpId]) -> T) -> T;
+
+    /// get a copy of the meta inside this component set, sorted via the `Ord`
+    /// trait on `CmpMeta`
+    fn metas(&self) -> Vec<CmpMeta>;
+}
+
 /// meta-data about a component type, rust-compiled or dynamic
 #[derive(Debug, Clone)]
 pub struct CmpMeta

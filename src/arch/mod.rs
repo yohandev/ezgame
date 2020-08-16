@@ -1,9 +1,11 @@
 // mod
 mod chunk;
 mod meta;
+mod map;
 
-use self::chunk::*;
-use self::meta::*;
+pub use self::chunk::*;
+pub use self::meta::*;
+pub use self::map::*;
 
 // Archetype
 use std::collections::HashSet;
