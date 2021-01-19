@@ -1,9 +1,0 @@
-[package]
-name = "ezgame"
-version = "0.1.0"
-authors = ["yohandev"]
-edition = "2018"
-
-[dependencies]
-ezgame-macros = { path = "macros", version = "0.1.0" }
-hashbrown = { version = "0.8.2", features = ["raw"] }
